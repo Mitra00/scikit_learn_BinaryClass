@@ -17,12 +17,12 @@ from sklearn.datasets import fetch_20newsgroups
 from sklearn.feature_extraction.text import TfidfVectorizer
 from sklearn.feature_extraction.text import HashingVectorizer
 from sklearn.feature_selection import SelectKBest, chi2
-from sklearn.linear_model import RidgeClassifier
 from sklearn.pipeline import Pipeline
-from sklearn.svm import LinearSVC
-from sklearn.linear_model import SGDClassifier
+from sklearn.linear_model import RidgeClassifier
 from sklearn.linear_model import Perceptron
 from sklearn.linear_model import PassiveAggressiveClassifier
+from sklearn.linear_model import SGDClassifier, LogisticRegression
+from sklearn.svm import LinearSVC, NuSVC, SVC
 from sklearn.naive_bayes import BernoulliNB, MultinomialNB
 from sklearn.neighbors import KNeighborsClassifier
 from sklearn.neighbors import NearestCentroid
@@ -31,6 +31,11 @@ from sklearn.utils.extmath import density
 from sklearn import metrics
 import numpy as np
 import pandas as pd
+from matplotlib import pyplot as plt
+from sklearn.metrics import precision_recall_curve
+from sklearn.metrics import average_precision_score
+from sklearn.cross_validation import train_test_split
+from sklearn.preprocessing import label_binarize
 
 
 # Display progress logs on stdout
@@ -97,10 +102,10 @@ print()
 #print("Loading 20 newsgroups dataset for categories:")
 #print(categories if categories else "all")
 
-data_train = pd.read_csv('traindata.csv', sep=',', encoding="ISO-8859-1", names=["label", "message"])
+data_train = pd.read_csv("TrainSet_20000.csv", sep=',', encoding="ISO-8859-1", names=["label", "message"])
 
 
-data_test = pd.read_csv('test.csv', sep=',', encoding="ISO-8859-1", names=["label", "message"])
+data_test = pd.read_csv("TestSet_359.csv", sep=',', encoding="ISO-8859-1", names=["label", "message"])
 
 
 
@@ -197,6 +202,11 @@ def benchmark(clf):
     print("Training: ")
     print(clf)
     t0 = time()
+    # FIXME: use X_train.toarray() instead. if it didn't work use y_train.toarray() too :D
+    #y_train.toarray()
+    #X_train.toarray()
+    #clf.fit(X_train.toarray(), y_train)
+    #clf.fit(X_train, y_train.toarray())
     clf.fit(X_train, y_train)
     train_time = time() - t0
     print("train time: %0.3fs" % train_time)
@@ -208,6 +218,12 @@ def benchmark(clf):
 
     score = metrics.accuracy_score(y_test, pred)
     print("accuracy:   %0.3f" % score)
+    score = metrics.precision_score(y_test, pred, average='weighted', pos_label=None)
+    print("precision:   %0.3f" % score)
+    score = metrics.recall_score(y_test, pred, average='weighted', pos_label=None)
+    print("recall:   %0.3f" % score)
+    score = metrics.f1_score(y_test, pred, average='weighted', pos_label=None)
+    print("f1:   %0.3f" % score)
 
     if hasattr(clf, 'coef_'):
         print("dimensionality: %d" % clf.coef_.shape[1])
@@ -240,6 +256,7 @@ for clf, name in (
         (RidgeClassifier(tol=1e-2, solver="lsqr"), "Ridge Classifier"),
         (Perceptron(n_iter=50), "Perceptron"),
         (PassiveAggressiveClassifier(n_iter=50), "Passive-Aggressive"),
+        #(NuSVC, " Nu SVC"),
         (KNeighborsClassifier(n_neighbors=10), "kNN"),
         (RandomForestClassifier(n_estimators=100), "Random forest")):
     print('=' * 80)
@@ -249,6 +266,11 @@ for clf, name in (
 for penalty in ["l2", "l1"]:
     print('=' * 80)
     print("%s penalty" % penalty.upper())
+
+    # Train LogisticRegression model
+    results.append(benchmark(LogisticRegression(max_iter=50, penalty=penalty)))
+
+
     # Train Liblinear model
     results.append(benchmark(LinearSVC(loss='l2', penalty=penalty,
                                             dual=False, tol=1e-3)))
@@ -256,6 +278,11 @@ for penalty in ["l2", "l1"]:
     # Train SGD model
     results.append(benchmark(SGDClassifier(alpha=.0001, n_iter=50,
                                            penalty=penalty)))
+
+# Train LogisticRegression with Elastic Net penalty
+print('=' * 80)
+print("Elastic-Net penalty")
+results.append(benchmark(LogisticRegression(max_iter=50, penalty=penalty)))
 
 # Train SGD with Elastic Net penalty
 print('=' * 80)
@@ -283,6 +310,8 @@ results.append(benchmark(Pipeline([
   ('classification', LinearSVC())
 ])))
 
+
+
 # make some plots
 
 indices = np.arange(len(results))
@@ -308,3 +337,34 @@ for i, c in zip(indices, clf_names):
     plt.text(-.3, i, c)
 
 plt.show()
+
+## Plot Precision-Recall curve for each class
+#plt.clf()
+#plt.plot(metrics.recall["micro"], metrics.precision["micro"],
+#         label='micro-average Precision-recall curve (area = {0:0.2f})'
+#               ''.format(metrics.average_precision["micro"]))
+#for i in range(1):
+#    plt.plot(metrics.recall[i], metrics.precision[i],
+#             label='Precision-recall curve of class {0} (area = {1:0.2f})'
+#                   ''.format(i, metrics.average_precision[i]))
+#
+#plt.xlim([0.0, 1.0])
+#plt.ylim([0.0, 1.05])
+#plt.xlabel('Recall')
+#plt.ylabel('Precision')
+#plt.title('Extension of Precision-Recall curve to multi-class')
+#plt.legend(loc="lower right")
+#plt.show()
+#
+## Plot Precision-Recall curve
+#plt.clf()
+#plt.plot(metrics.recall[0], metrics.precision[0], label='Precision-Recall curve')
+#plt.xlabel('Recall')
+#plt.ylabel('Precision')
+#plt.ylim([0.0, 1.05])
+#plt.xlim([0.0, 1.0])
+#plt.title('Precision-Recall example: AUC={0:0.2f}'.format(metrics.average_precision[0]))
+#plt.legend(loc="lower left")
+#plt.show()
+
+
